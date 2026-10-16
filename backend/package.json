@@ -5,12 +5,14 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
-    "test": "tsx test/api.test.ts"
+    "test": "tsx test/api.test.ts && tsx test/alarm-verification.test.ts",
+    "test:alarm": "tsx test/alarm-verification.test.ts"
   },
   "keywords": [],
   "author": "",
@@ -37,6 +39,7 @@
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "prisma": "^7.10.1",
+    "socket.io-client": "^4.8.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }

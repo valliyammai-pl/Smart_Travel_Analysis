@@ -4,14 +4,28 @@ import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env';
 import { UserPayload } from '../types';
 
+import { isAllowedOrigin } from '../config/cors';
+
 let ioInstance: Server | null = null;
 
 export const initSocket = (server: HttpServer): Server => {
   const io = new Server(server, {
     cors: {
-      origin: '*', // Allow frontend Vite dev & preview origins
+      origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Cross-Origin Request Blocked by SmartTravel CORS Policy'));
+        }
+      },
       methods: ['GET', 'POST'],
       credentials: true,
+    },
+    allowRequest: (req, callback) => {
+      const origin = req.headers.origin;
+      const host = req.headers.host;
+      const allowed = isAllowedOrigin(origin, host);
+      callback(null, allowed);
     },
     transports: ['websocket', 'polling'],
   });

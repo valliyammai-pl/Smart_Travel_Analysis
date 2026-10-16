@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useAlarm } from '../context/AlarmContext';
-import { DestinationAlarm } from '../types';
+import { DestinationAlarm, Schedule } from '../types';
+import { AlarmTestPanel } from '../components/AlarmTestPanel';
 import {
   BellRing,
   CheckCircle,
@@ -13,20 +14,27 @@ import {
   MapPin,
   Clock,
   Sparkles,
+  Wrench,
+  ChevronDown,
 } from 'lucide-react';
 
 export const DestinationAlarms: React.FC = () => {
   const { isAuthenticated } = useAuth();
   const { playAlarmSound, triggerManualTestAlert } = useAlarm();
   const [alarms, setAlarms] = useState<DestinationAlarm[]>([]);
+  const [selectedAlarmId, setSelectedAlarmId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [creatingDemo, setCreatingDemo] = useState(false);
 
   const fetchAlarms = async () => {
     try {
       const res = await api.get('/alarms');
       if (res.success && res.data) {
         setAlarms(res.data);
+        if (res.data.length > 0 && !selectedAlarmId) {
+          setSelectedAlarmId(res.data[0].id);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -67,35 +75,100 @@ export const DestinationAlarms: React.FC = () => {
     }
   };
 
-  const handleTestTrigger = async (alarmId: string, threshold: '2km' | '500m' | '200m', stopName: string) => {
+  // Helper to create a quick test alarm if user doesn't have one
+  const handleCreateDemoAlarm = async () => {
+    setCreatingDemo(true);
     try {
-      await api.post(`/alarms/${alarmId}/test-trigger`, { threshold });
-      triggerManualTestAlert(threshold, stopName);
-    } catch {
-      triggerManualTestAlert(threshold, stopName);
+      const schedRes = await api.get('/schedules');
+      if (schedRes.success && schedRes.data.length > 0) {
+        const sched: Schedule = schedRes.data[0];
+        const stops = sched.route.stops || [];
+        const destStop = stops[stops.length - 1];
+
+        const res = await api.post('/alarms', {
+          scheduleId: sched.id,
+          targetLatitude: destStop?.latitude || 13.0694,
+          targetLongitude: destStop?.longitude || 80.1948,
+          targetStopName: destStop?.stopName || 'Koyambedu Bus Terminus, Chennai',
+        });
+
+        if (res.success) {
+          setMessage('Test Destination Alarm created successfully!');
+          await fetchAlarms();
+        }
+      }
+    } catch (err: any) {
+      setMessage(err.message || 'Failed to create demo alarm');
+    } finally {
+      setCreatingDemo(false);
     }
   };
 
+  const selectedAlarm = alarms.find((a) => a.id === selectedAlarmId) || alarms[0];
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      {/* Header */}
       <div>
         <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-lavender-100 text-lavender-800 text-xs font-bold mb-2">
           <BellRing className="w-3.5 h-3.5 text-lavender-600" />
           <span>Intelligent Geofence Engine</span>
         </div>
-        <h1 className="text-2xl font-black text-slate-900">Destination Alarm Control Center</h1>
+        <h1 className="text-3xl font-black text-slate-900">Destination Alarm Center</h1>
         <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-          SmartTravel automatically tracks your bus against your destination coordinates and plays progressive audio-visual alerts as you draw closer.
+          SmartTravel tracks fleet vehicles against your destination coordinates and plays progressive audio-visual alerts at 2 km, 500 m, and 200 m before your stop.
         </p>
       </div>
 
       {message && (
-        <div className="p-3.5 bg-lavender-50 border border-lavender-200 text-lavender-900 text-xs font-semibold rounded-2xl">
-          {message}
+        <div className="p-3.5 bg-lavender-50 border border-lavender-200 text-lavender-900 text-xs font-semibold rounded-2xl flex items-center justify-between">
+          <span>{message}</span>
+          <button onClick={() => setMessage('')} className="text-xs font-bold text-lavender-600">✕</button>
         </div>
       )}
 
-      {/* Threshold Explanation Banner */}
+      {/* Development-Only Alarm Test Panel */}
+      {selectedAlarm ? (
+        <div className="space-y-3">
+          {alarms.length > 1 && (
+            <div className="flex items-center space-x-2 text-xs">
+              <span className="font-bold text-slate-700">Select Alarm to Test:</span>
+              <select
+                value={selectedAlarmId}
+                onChange={(e) => setSelectedAlarmId(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-lavender-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none"
+              >
+                {alarms.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.targetStopName} ({a.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <AlarmTestPanel
+            alarm={selectedAlarm}
+            onAlarmUpdated={fetchAlarms}
+          />
+        </div>
+      ) : (
+        <div className="bg-gradient-to-br from-lavender-950 via-slate-900 to-lavender-950 rounded-3xl p-8 text-white border-2 border-lavender-400/40 shadow-xl text-center space-y-4">
+          <Wrench className="w-12 h-12 text-amber-400 mx-auto" />
+          <h3 className="text-lg font-black text-white">Development Alarm Test Panel</h3>
+          <p className="text-xs text-slate-300 max-w-md mx-auto">
+            You do not currently have an active destination alarm bound to your account. Click below to instantly spawn an isolated test alarm to simulate trip approach telemetry.
+          </p>
+          <button
+            onClick={handleCreateDemoAlarm}
+            disabled={creatingDemo}
+            className="px-6 py-3 bg-lavender-600 hover:bg-lavender-500 text-white rounded-2xl font-bold text-xs shadow-lavender transition-all active:scale-95 disabled:bg-slate-700"
+          >
+            {creatingDemo ? 'Spawning Alarm...' : '⚡ Initialize Development Test Alarm'}
+          </button>
+        </div>
+      )}
+
+      {/* Threshold Explanation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl p-4 border border-lavender-200 shadow-sm space-y-1">
           <div className="flex items-center space-x-2 text-lavender-700 font-bold text-xs uppercase">
@@ -152,7 +225,7 @@ export const DestinationAlarms: React.FC = () => {
         </div>
       </div>
 
-      {/* Alarms List */}
+      {/* Alarms Database Inventory List */}
       <div className="space-y-4">
         <h3 className="font-bold text-slate-900 text-base">Your Active Geofence Alarms</h3>
 
@@ -161,16 +234,10 @@ export const DestinationAlarms: React.FC = () => {
         ) : alarms.length === 0 ? (
           <div className="bg-white rounded-3xl p-10 text-center border border-lavender-100 shadow-sm">
             <BellRing className="w-12 h-12 text-lavender-300 mx-auto mb-3" />
-            <h4 className="font-bold text-slate-800 text-sm">No Active Alarms</h4>
+            <h4 className="font-bold text-slate-800 text-sm">No Active Alarms in Database</h4>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              Destination alarms can be activated when booking any bus trip, or simulated below for demonstration.
+              Destination alarms can be activated when booking any bus trip, or initialized via the development test panel above.
             </p>
-            <button
-              onClick={() => triggerManualTestAlert('2km')}
-              className="mt-4 px-4 py-2 bg-lavender-600 text-white rounded-xl text-xs font-bold shadow-lavender-sm"
-            >
-              Simulate Test Alarm Notification
-            </button>
           </div>
         ) : (
           alarms.map((alarm) => {
@@ -237,7 +304,7 @@ export const DestinationAlarms: React.FC = () => {
                     <div className="text-[10px] uppercase font-bold text-slate-400">Stage 1</div>
                     <div>2 km Threshold</div>
                     <div className="text-[10px] mt-1 font-semibold">
-                      {alarm.threshold2kmTriggered ? '✅ Alerted' : '⏳ Pending'}
+                      {alarm.threshold2kmTriggered ? '✅ Alerted (1x)' : '⏳ Pending'}
                     </div>
                   </div>
 
@@ -251,7 +318,7 @@ export const DestinationAlarms: React.FC = () => {
                     <div className="text-[10px] uppercase font-bold text-slate-400">Stage 2</div>
                     <div>500 m Threshold</div>
                     <div className="text-[10px] mt-1 font-semibold">
-                      {alarm.threshold500mTriggered ? '✅ Alerted' : '⏳ Pending'}
+                      {alarm.threshold500mTriggered ? '✅ Alerted (1x)' : '⏳ Pending'}
                     </div>
                   </div>
 
@@ -265,33 +332,8 @@ export const DestinationAlarms: React.FC = () => {
                     <div className="text-[10px] uppercase font-bold text-slate-400">Stage 3</div>
                     <div>200 m Arrival</div>
                     <div className="text-[10px] mt-1 font-semibold">
-                      {alarm.threshold200mTriggered ? '🚨 Triggered' : '⏳ Pending'}
+                      {alarm.threshold200mTriggered ? '🚨 Triggered (1x)' : '⏳ Pending'}
                     </div>
-                  </div>
-                </div>
-
-                {/* Test Trigger Simulator buttons for this alarm */}
-                <div className="pt-2 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
-                  <span>Interactive simulation test:</span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleTestTrigger(alarm.id, '2km', alarm.targetStopName)}
-                      className="px-2.5 py-1 rounded-lg bg-lavender-50 hover:bg-lavender-100 text-lavender-700 font-bold border border-lavender-200"
-                    >
-                      Fire 2km
-                    </button>
-                    <button
-                      onClick={() => handleTestTrigger(alarm.id, '500m', alarm.targetStopName)}
-                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold border border-amber-200"
-                    >
-                      Fire 500m
-                    </button>
-                    <button
-                      onClick={() => handleTestTrigger(alarm.id, '200m', alarm.targetStopName)}
-                      className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold border border-rose-200"
-                    >
-                      Fire 200m
-                    </button>
                   </div>
                 </div>
               </div>

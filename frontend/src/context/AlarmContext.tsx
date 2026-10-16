@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getSocket } from '../services/socket';
+import { api } from '../services/api';
 import { useAuth } from './AuthContext';
 
 export interface AlarmAlert {
@@ -13,13 +14,29 @@ export interface AlarmAlert {
   timestamp: string;
   message: string;
   severity: 'info' | 'warning' | 'critical';
+  isSimulated?: boolean;
+}
+
+export interface AlarmEventLog {
+  id: string;
+  timestamp: string;
+  distanceMeters: number;
+  threshold?: '2km' | '500m' | '200m';
+  triggered: boolean;
+  duplicatePrevented: boolean;
+  soundPlayed?: string;
+  message: string;
+  source: 'SOCKET' | 'TEST_PANEL';
 }
 
 interface AlarmContextType {
   activeAlert: AlarmAlert | null;
+  eventLogs: AlarmEventLog[];
   dismissAlert: () => void;
   playAlarmSound: (threshold: '2km' | '500m' | '200m') => void;
   triggerManualTestAlert: (threshold: '2km' | '500m' | '200m', stopName?: string) => void;
+  simulateDistance: (alarmId: string, distanceMeters: number) => Promise<any>;
+  clearEventLogs: () => void;
 }
 
 const AlarmContext = createContext<AlarmContextType | undefined>(undefined);
@@ -27,6 +44,7 @@ const AlarmContext = createContext<AlarmContextType | undefined>(undefined);
 export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [activeAlert, setActiveAlert] = useState<AlarmAlert | null>(null);
+  const [eventLogs, setEventLogs] = useState<AlarmEventLog[]>([]);
 
   // Play synthesized audio tone using Web Audio API (cross-browser, no asset loading needed)
   const playAlarmSound = useCallback((threshold: '2km' | '500m' | '200m') => {
@@ -49,7 +67,7 @@ export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.6);
       } else if (threshold === '500m') {
-        // Warning double beep
+        // Warning double beep (784Hz)
         [0, 0.2].forEach((offset) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -63,7 +81,7 @@ export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           osc.stop(ctx.currentTime + offset + 0.15);
         });
       } else {
-        // 200m Arrival siren pulse
+        // 200m Arrival siren pulse (880Hz)
         [0, 0.15, 0.3, 0.45].forEach((offset) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -93,6 +111,27 @@ export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.log('🚨 Destination Alarm received via Socket:', alert);
       setActiveAlert(alert);
       playAlarmSound(alert.threshold);
+
+      // Append to event logs
+      setEventLogs((prev) => [
+        {
+          id: `${Date.now()}-${Math.random()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          distanceMeters: alert.distanceMeters,
+          threshold: alert.threshold,
+          triggered: true,
+          duplicatePrevented: false,
+          soundPlayed:
+            alert.threshold === '2km'
+              ? 'Informational Chime (523Hz ➔ 659Hz)'
+              : alert.threshold === '500m'
+              ? 'Warning Beep (784Hz)'
+              : 'Arrival Siren Pulse (880Hz)',
+          message: alert.message,
+          source: 'SOCKET',
+        },
+        ...prev.slice(0, 49),
+      ]);
     };
 
     socket.on('destination_alarm', handleAlarm);
@@ -104,6 +143,60 @@ export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const dismissAlert = () => {
     setActiveAlert(null);
+  };
+
+  const clearEventLogs = () => {
+    setEventLogs([]);
+  };
+
+  const simulateDistance = async (alarmId: string, distanceMeters: number) => {
+    try {
+      const res = await api.post(`/alarms/${alarmId}/simulate-distance`, { distanceMeters });
+      const data = res.data;
+
+      const sound = data.triggered
+        ? data.threshold === '2km'
+          ? 'Informational Chime (523Hz ➔ 659Hz)'
+          : data.threshold === '500m'
+          ? 'Warning Beep (784Hz)'
+          : 'Arrival Siren Pulse (880Hz)'
+        : undefined;
+
+      if (data.triggered && data.threshold) {
+        playAlarmSound(data.threshold);
+      }
+
+      setEventLogs((prev) => [
+        {
+          id: `${Date.now()}-${Math.random()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          distanceMeters,
+          threshold: data.threshold,
+          triggered: data.triggered,
+          duplicatePrevented: data.duplicatePrevented,
+          soundPlayed: sound,
+          message: data.message,
+          source: 'TEST_PANEL',
+        },
+        ...prev.slice(0, 49),
+      ]);
+
+      return data;
+    } catch (err: any) {
+      setEventLogs((prev) => [
+        {
+          id: `${Date.now()}-${Math.random()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          distanceMeters,
+          triggered: false,
+          duplicatePrevented: false,
+          message: `Error: ${err.message || 'Simulation failed'}`,
+          source: 'TEST_PANEL',
+        },
+        ...prev.slice(0, 49),
+      ]);
+      throw err;
+    }
   };
 
   const triggerManualTestAlert = (threshold: '2km' | '500m' | '200m', stopName: string = 'Koyambedu Bus Terminus, Chennai') => {
@@ -122,6 +215,7 @@ export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           ? `⚠️ Destination close! Only 500 meters remaining to ${stopName}. Gather your belongings.`
           : `🔔 Wake Up Alarm: Bus is 2 km from your stop (${stopName}). Prepare to get ready!`,
       severity: threshold === '200m' ? 'critical' : threshold === '500m' ? 'warning' : 'info',
+      isSimulated: true,
     };
 
     setActiveAlert(mockAlert);
@@ -132,9 +226,12 @@ export const AlarmProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <AlarmContext.Provider
       value={{
         activeAlert,
+        eventLogs,
         dismissAlert,
         playAlarmSound,
         triggerManualTestAlert,
+        simulateDistance,
+        clearEventLogs,
       }}
     >
       {children}

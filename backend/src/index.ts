@@ -12,9 +12,9 @@ const server = http.createServer(app);
 initSocket(server);
 
 // Start HTTP & WebSocket server
-server.listen(ENV.PORT, () => {
-  console.log(`🚌 SmartTravel Server running on http://localhost:${ENV.PORT}`);
-  console.log(`📊 Health check available at http://localhost:${ENV.PORT}/api/health`);
+server.listen(ENV.PORT, '0.0.0.0', () => {
+  console.log(`🚌 SmartTravel Server running on 0.0.0.0:${ENV.PORT}`);
+  console.log(`📊 Health check available at /api/health`);
 
   // Start GPS Simulation engine (updates every 3 seconds)
   startGpsSimulator(3000);

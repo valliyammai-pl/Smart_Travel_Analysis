@@ -4,6 +4,7 @@ import { AlarmStatus, NotificationType } from '@prisma/client';
 import { prisma } from '../config/db';
 import { AuthenticatedRequest } from '../types';
 import { getIO } from '../socket';
+import { evaluateAlarmForDistance } from '../services/alarm.service';
 
 export const createAlarmSchema = z.object({
   scheduleId: z.string().uuid(),
@@ -182,6 +183,51 @@ export const testTriggerThreshold = async (req: AuthenticatedRequest, res: Respo
     } catch {}
 
     res.json({ success: true, message: `Emitted test alarm for ${threshold}` });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const simulateDistanceSchema = z.object({
+  distanceMeters: z.number().min(0, 'Distance must be non-negative'),
+});
+
+export const simulateDistanceTest = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    const id = req.params.id as string;
+    const { distanceMeters } = req.body;
+
+    const alarm = await prisma.destinationAlarm.findUnique({
+      where: { id },
+      include: { schedule: { include: { bus: true } } },
+    });
+
+    if (!alarm) {
+      return res.status(404).json({ success: false, message: 'Alarm not found' });
+    }
+
+    // Role-based security check: only the owner or an admin can run distance simulations
+    if (req.user.role !== 'ADMIN' && alarm.userId !== req.user.userId) {
+      return res.status(403).json({ success: false, message: 'Access denied: unauthorized user' });
+    }
+
+    const busInfo = {
+      busId: alarm.schedule.bus.id,
+      busNumber: alarm.schedule.bus.busNumber,
+    };
+
+    // Evaluate distance with strict duplicate prevention and zero booking mutation
+    const result = await evaluateAlarmForDistance(alarm, distanceMeters, busInfo, true);
+
+    res.json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
   } catch (error) {
     next(error);
   }

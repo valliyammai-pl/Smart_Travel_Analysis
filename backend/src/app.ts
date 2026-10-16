@@ -6,14 +6,21 @@ import fs from 'fs';
 import apiRoutes from './routes';
 import { errorHandler } from './middlewares/errorHandler';
 
+import { isAllowedOrigin } from './config/cors';
+
 export const createApp = (): Express => {
   const app = express();
 
-  // Middleware
+  // Secure CORS Middleware supporting same-origin deployment & local development
   app.use(
-    cors({
-      origin: true, // Allow dev and preview origins
-      credentials: true,
+    cors((req, callback) => {
+      const origin = req.header('Origin');
+      const host = req.header('Host');
+      const allowed = isAllowedOrigin(origin, host);
+      callback(null, {
+        origin: allowed,
+        credentials: true,
+      });
     })
   );
   app.use(express.json());

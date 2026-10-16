@@ -4,12 +4,15 @@
   "private": true,
   "description": "SmartTravel - Full-Stack Real-Time Bus Booking, Tracking & Destination Alarm Platform",
   "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "build": "npm run install:all && npm --prefix backend run prisma:generate && npm --prefix frontend run build && npm --prefix backend run build",
+    "render:build": "npm run install:all && npm --prefix backend run prisma:generate && npm --prefix frontend run build && npm --prefix backend run build",
     "start": "npm run start --prefix backend",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
-    "build": "npm run build --prefix frontend && npm run build --prefix backend",
     "test": "npm run test --prefix backend",
     "seed": "npm run prisma:seed --prefix backend",
+    "migrate:deploy": "npx --prefix backend prisma migrate deploy",
     "db:push": "npx --prefix backend prisma db push"
   }
 }

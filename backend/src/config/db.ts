@@ -1,11 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import dotenv from 'dotenv';
+import { ENV } from './env';
 
-dotenv.config();
-
-const connectionString = process.env.DATABASE_URL || 'postgresql://smarttravel:smarttravel@localhost:5432/smarttravel_db?schema=public';
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({ connectionString: ENV.DATABASE_URL });
 
 export const prisma = new PrismaClient({ adapter });
 

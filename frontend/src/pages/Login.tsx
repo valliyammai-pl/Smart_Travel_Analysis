@@ -59,30 +59,32 @@ export const Login: React.FC = () => {
           </div>
         )}
 
-        {/* Demo Credentials Quick Fill Bar */}
-        <div className="bg-lavender-50/80 p-3.5 rounded-2xl border border-lavender-200 text-xs space-y-2">
-          <div className="text-[11px] font-bold text-lavender-900 uppercase tracking-wider">
-            ⚡ Quick Demo Logins:
+        {/* Development-Only Credentials Quick Fill Bar */}
+        {import.meta.env.DEV && (
+          <div className="bg-lavender-50/80 p-3.5 rounded-2xl border border-lavender-200 text-xs space-y-2">
+            <div className="text-[11px] font-bold text-lavender-900 uppercase tracking-wider">
+              ⚡ Development Quick Logins:
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={fillDemoUser}
+                className="flex-1 py-1.5 px-2 bg-white hover:bg-lavender-100 text-lavender-800 rounded-xl font-bold border border-lavender-200 transition-colors flex items-center justify-center space-x-1"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Passenger</span>
+              </button>
+              <button
+                type="button"
+                onClick={fillDemoAdmin}
+                className="flex-1 py-1.5 px-2 bg-white hover:bg-lavender-100 text-lavender-800 rounded-xl font-bold border border-lavender-200 transition-colors flex items-center justify-center space-x-1"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Admin (Dev)</span>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              type="button"
-              onClick={fillDemoUser}
-              className="flex-1 py-1.5 px-2 bg-white hover:bg-lavender-100 text-lavender-800 rounded-xl font-bold border border-lavender-200 transition-colors flex items-center justify-center space-x-1"
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Passenger</span>
-            </button>
-            <button
-              type="button"
-              onClick={fillDemoAdmin}
-              className="flex-1 py-1.5 px-2 bg-white hover:bg-lavender-100 text-lavender-800 rounded-xl font-bold border border-lavender-200 transition-colors flex items-center justify-center space-x-1"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Admin</span>
-            </button>
-          </div>
-        </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
