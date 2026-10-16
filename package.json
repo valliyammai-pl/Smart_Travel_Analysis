@@ -1,0 +1,15 @@
+{
+  "name": "smarttravel-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SmartTravel - Full-Stack Real-Time Bus Booking, Tracking & Destination Alarm Platform",
+  "scripts": {
+    "start": "npm run start --prefix backend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "test": "npm run test --prefix backend",
+    "seed": "npm run prisma:seed --prefix backend",
+    "db:push": "npx --prefix backend prisma db push"
+  }
+}

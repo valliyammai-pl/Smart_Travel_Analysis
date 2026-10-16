@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum BusType {
+  AC_SLEEPER
+  AC_SEATER
+  NON_AC_SEATER
+  DELUXE_EXPRESS
+}
+
+enum BusStatus {
+  ON_TIME
+  DELAYED
+  IN_TRANSIT
+  COMPLETED
+  MAINTENANCE
+}
+
+enum ScheduleStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum AlarmStatus {
+  ACTIVE
+  TRIGGERED
+  DISMISSED
+}
+
+enum NotificationType {
+  ALARM_2KM
+  ALARM_500M
+  ALARM_200M
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  SCHEDULE_UPDATE
+  SYSTEM
+}
+
+model User {
+  id           String             @id @default(uuid())
+  email        String             @unique
+  password     String
+  name         String
+  phone        String?
+  role         Role               @default(USER)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  bookings     Booking[]
+  alarms       DestinationAlarm[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Bus {
+  id           String        @id @default(uuid())
+  busNumber    String        @unique
+  operator     String
+  type         BusType       @default(AC_SEATER)
+  totalSeats   Int           @default(36)
+  currentLat   Float?
+  currentLng   Float?
+  speed        Float?        @default(0)
+  heading      Float?        @default(0)
+  isSimulating Boolean       @default(true)
+  status       BusStatus     @default(ON_TIME)
+  lastUpdated  DateTime?
+  schedules    Schedule[]
+  gpsLogs      BusGpsLog[]
+
+  @@map("buses")
+}
+
+model Route {
+  id               String       @id @default(uuid())
+  routeName        String
+  source           String
+  destination      String
+  totalDistanceKm  Float
+  estimatedMinutes Int
+  stops            RouteStop[]
+  schedules        Schedule[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@map("routes")
+}
+
+model RouteStop {
+  id                         String   @id @default(uuid())
+  routeId                    String
+  stopName                   String
+  stopOrder                  Int
+  latitude                   Float
+  longitude                  Float
+  distanceFromSourceKm       Float
+  estimatedMinutesFromSource Int
+  route                      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([routeId, stopOrder])
+  @@map("route_stops")
+}
+
+model Schedule {
+  id            String         @id @default(uuid())
+  busId         String
+  routeId       String
+  departureTime DateTime
+  arrivalTime   DateTime
+  fare          Float
+  status        ScheduleStatus @default(SCHEDULED)
+  bus           Bus            @relation(fields: [busId], references: [id], onDelete: Cascade)
+  route         Route          @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  seats         Seat[]
+  bookings      Booking[]
+  alarms        DestinationAlarm[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([busId])
+  @@index([routeId])
+  @@map("schedules")
+}
+
+model Seat {
+  id         String   @id @default(uuid())
+  scheduleId String
+  seatNumber String
+  seatType   String   @default("STANDARD")
+  price      Float
+  isBooked   Boolean  @default(false)
+  schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, seatNumber])
+  @@index([scheduleId])
+  @@map("seats")
+}
+
+model Booking {
+  id               String            @id @default(uuid())
+  bookingReference String            @unique
+  userId           String
+  scheduleId       String
+  seatNumbers      String[]
+  totalAmount      Float
+  status           BookingStatus     @default(CONFIRMED)
+  passengerName    String
+  passengerEmail   String
+  passengerPhone   String
+  pickupStop       String?
+  dropoffStop      String?
+  bookingDate      DateTime          @default(now())
+  cancelledAt      DateTime?
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedule         Schedule          @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  alarms           DestinationAlarm[]
+
+  @@index([userId])
+  @@index([scheduleId])
+  @@map("bookings")
+}
+
+model DestinationAlarm {
+  id                    String      @id @default(uuid())
+  userId                String
+  bookingId             String?
+  scheduleId            String
+  targetLatitude        Float
+  targetLongitude       Float
+  targetStopName        String
+  threshold2kmTriggered Boolean     @default(false)
+  threshold500mTriggered Boolean    @default(false)
+  threshold200mTriggered Boolean    @default(false)
+  status                AlarmStatus @default(ACTIVE)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking               Booking?    @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  schedule              Schedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([scheduleId])
+  @@map("destination_alarms")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model BusGpsLog {
+  id         String   @id @default(uuid())
+  busId      String
+  latitude   Float
+  longitude  Float
+  speed      Float    @default(0)
+  heading    Float    @default(0)
+  recordedAt DateTime @default(now())
+  bus        Bus      @relation(fields: [busId], references: [id], onDelete: Cascade)
+
+  @@index([busId, recordedAt])
+  @@map("bus_gps_logs")
+}
